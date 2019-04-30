@@ -17,15 +17,17 @@
 
 #define ENCODER3_PINA     A3
 #define ENCODER3_PINB     A4
-#define ENCODER3_BTN      A5
+#define ENCODER3_BTN      A6
 
-#define strip1A    3
-#define strip1B    5
+#define STRIP1A           3
+#define STRIP1B           5
 
-#define strip2A    6
-#define strip2B    9
+#define STRIP2A           6
+#define STRIP2B           9
 
-#define strip3    10
+#define STRIP3A           10
+
+#define PSU_ON            A5
 
 #define ENCODER_STEPS_PER_NOTCH    4   // Change this depending on which encoder is used
 
@@ -62,12 +64,27 @@ ClickEncoder *encoders[4];
 class LedStrip {
 protected:
   int_fast16_t brightness;
+  int_fast16_t pin;
   bool on;
 
 public:
-  ledStrip(int_fast16_t brightness = 255, bool on = false) {
+  LedStrip(int_fast16_t pin, int_fast16_t brightness = 255, bool on = false) {
+    this -> pin = pin;
+
     this -> brightness = brightness;
     this -> on = on;
+    update();
+  }
+
+  void update() {
+    Serial.print((int)on);
+    Serial.print(" ");
+    Serial.print(brightness);
+    Serial.print(" ");
+    Serial.print(pin);
+    Serial.print(" ");
+    Serial.println(on * brightness);
+    analogWrite(pin, on * brightness);
   }
 
   void setBrightness(int_fast16_t i) {
@@ -79,14 +96,19 @@ public:
     }
 
     brightness = i;
+    update();
   }
 
-  void brighter (int_fast16_t i = 1) {
+  void brighter (int_fast16_t i = 5) {
     this -> setBrightness(brightness + i);
+    on = true;
+    update();
   }
 
-  void darker (int_fast16_t i = 1) {
+  void darker (int_fast16_t i = 5) {
     this -> setBrightness(brightness - i);
+    on = true;
+    update();
   }
 
   int_fast16_t getBrightness() {
@@ -95,25 +117,32 @@ public:
 
   void toggle() {
     on = !on;
+    update();
   }
 
   bool isOn() {
     return on;
-  }
-
-  int_fast16_t get() {
-    return on * brightness;
   }
 };
 
 class CwwStrip: public LedStrip {
 protected:
   int_fast16_t warmLevel, coldLevel;
+  int_fast16_t pinA, pinB;
 
 public:
-  cwwStrip(int_fast16_t brightness = 255, bool on = false, int_fast16_t warmLevel = 1, int_fast16_t coldLevel = 1): ledStrip(brightness, on) {
+  CwwStrip(int_fast16_t pinA, int_fast16_t pinB, int_fast16_t brightness = 255, bool on = false, int_fast16_t warmLevel = 1, int_fast16_t coldLevel = 1): LedStrip( pinA, brightness, on) {
+    this -> pinA = pinA;
+    this -> pinB = pinB;
+
     this -> warmLevel = warmLevel;
     this -> coldLevel = coldLevel;
+    update();
+  }
+
+  void update() {
+    analogWrite(pinA, on * (warmLevel / 255) * brightness);
+    analogWrite(pinB, on * (coldLevel / 255) * brightness);
   }
 
   void setTemperature(int_fast16_t warm = 100, int_fast16_t cold = 100) {
@@ -125,9 +154,10 @@ public:
 
     warmLevel = warmNormal * 255;
     coldLevel = coldNormal * 255;
+    update();
   }
 
-  void warmer(int_fast16_t i = 1) {
+  void warmer(int_fast16_t i = 5) {
     warmLevel += i;
     if (warmLevel > 255) {
       warmLevel = 255;
@@ -137,9 +167,10 @@ public:
     if (coldLevel < 0) {
       coldLevel = 0;
     }
+    update();
   }
 
-  void colder(int_fast16_t i = 1) {
+  void colder(int_fast16_t i = 5) {
     coldLevel += i;
     if (coldLevel > 255) {
       coldLevel = 255;
@@ -149,6 +180,7 @@ public:
     if (warmLevel < 0) {
       warmLevel = 0;
     }
+    update();
   }
 
   int_fast16_t getWarm() {
@@ -159,6 +191,10 @@ public:
     return on * (coldLevel / 255) * brightness;
   }
 };
+
+CwwStrip strip1 = CwwStrip(STRIP1A, STRIP1B);
+
+LedStrip strip3 = LedStrip(STRIP3A);
 
 void timerIsr() {
   for (int_fast16_t i = 0; i < ENCODERS; i += 1) {
@@ -187,14 +223,19 @@ void setup() {
     // in this version best to use pin -1 instead of 0 to disable button functions
     encoders[i] -> setButtonOnPinZeroEnabled(false);
   }
-
-  strip1 = new ledStrip()
+  pinMode(PSU_ON, OUTPUT);
 }
 
 void loop() {
   static int_fast16_t value[ENCODERS];
   static int_fast16_t last[ENCODERS];
   ClickEncoder::Button button;
+
+  if(strip1.isOn() || strip3.isOn()) {
+    digitalWrite(PSU_ON, HIGH);
+  } else {
+    digitalWrite(PSU_ON, LOW);
+  }
 
   for (int_fast16_t i = 0; i < ENCODERS; i += 1) {
     value[i] += encoders[i] -> getValue();
@@ -203,10 +244,33 @@ void loop() {
   for (int_fast16_t i = 0; i < ENCODERS; i += 1) {
     // turn handle
     if (value[i] != last[i]) {
-      last[i] = value[i];
       switch(i) {
         case 0: {
+          if (value[i] < last[i]) {
+            strip1.darker();
+          }
 
+          if (value[i] > last[i]) {
+            strip1.brighter();
+          }
+        } break;
+        case 1: {
+          if (value[i] < last[i]) {
+            strip3.darker();
+          }
+
+          if (value[i] > last[i]) {
+            strip3.brighter();
+          }
+        } break;
+        case 2: {
+          if (value[i] < last[i]) {
+            strip1.colder();
+          }
+
+          if (value[i] > last[i]) {
+            strip1.warmer();
+          }
         } break;
         default: {
           Serial.print("Encoder ");
@@ -215,12 +279,36 @@ void loop() {
           Serial.println(value[i]);
         } break;
       }
+
+      last[i] = value[i];
     }
 
     // button handle
     button = encoders[i] -> getButton();
     if (button != ClickEncoder::Open) {
       switch(i) {
+        case 0: {
+          switch(button) {
+            case ClickEncoder::Clicked: {
+              strip1.toggle();
+            } break;
+          }
+        } break;
+        case 1: {
+          switch(button) {
+            case ClickEncoder::Clicked: {
+              strip3.toggle();
+            } break;
+          } break;
+        } break;
+        case 2: {
+          switch(button) {
+            case ClickEncoder::Clicked: {
+              strip1.setTemperature();
+            } break;
+          }
+        }
+
         default: {
           Serial.print("Button ");
           Serial.print(i);
