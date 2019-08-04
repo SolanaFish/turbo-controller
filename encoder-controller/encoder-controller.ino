@@ -20,6 +20,8 @@
 #define ENCODER3_PINB     12
 #define ENCODER3_BTN      13
 
+#define BUTTON_CLICKED    1
+
 ClickEncoder encoder0 = ClickEncoder(
   ENCODER0_PINA,
   ENCODER0_PINB,
@@ -57,8 +59,8 @@ void timerIsr() {
 }
 
 void setup() {
-  Serial.begin(115200);
   Wire.begin();
+  Serial.begin(115200);
 
   Timer1.initialize(1000);
   Timer1.attachInterrupt(timerIsr);
@@ -80,6 +82,14 @@ void setup() {
   }
 }
 
+void wireSend(byte a, byte b, byte c) {
+    Wire.beginTransmission(1);
+    Wire.write(a);
+    Wire.write(b);
+    Wire.write(c);
+    Wire.endTransmission();
+}
+
 void loop() {
   static int_fast16_t value[ENCODERS];
   static int_fast16_t last[ENCODERS];
@@ -92,41 +102,20 @@ void loop() {
   for (int_fast16_t i = 0; i < ENCODERS; i += 1) {
     // turn handle
     if (value[i] != last[i]) {
-      Wire.beginTransmission(1);
-      Wire.write((byte)i);
-      Wire.write((byte)1);
-      Wire.endTransmission();
-      switch(i) {
-        default: {
-          Serial.print("Encoder ");
-          Serial.print(i);
-          Serial.print(" : ");
-          Serial.println(value[i]);
-        } break;
-      }
+        Serial.println("ok");
+        byte attr = value[i] > last[i] ? 1 : 0;
 
-      last[i] = value[i];
+        wireSend(i, 1, attr);
+        
+        last[i] = value[i];
     }
 
     // button handle
     button = encoders[i] -> getButton();
     if (button != ClickEncoder::Open) {
-      Serial.print("Button ");
-      Serial.print(i);
-      #define VERBOSECASE(label) case label: Serial.println(#label); break;
-      switch (button) {
-        VERBOSECASE(ClickEncoder::Pressed)
-        VERBOSECASE(ClickEncoder::Held)
-        VERBOSECASE(ClickEncoder::Released)
-        VERBOSECASE(ClickEncoder::Clicked)
-        VERBOSECASE(ClickEncoder::DoubleClicked)
-      }
-
-      switch(i) {
-        default: {
-
-        } break;
-      }
+        Serial.println("ok");
+        wireSend(i, 2, BUTTON_CLICKED);
     }
   }
+  delay(20);
 }
