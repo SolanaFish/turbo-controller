@@ -1,9 +1,8 @@
-#include <Wire.h>
+#include <SoftwareSerial.h>
 
 #define ENCODERS          4
 
 #define STRIP1A           3
-#define STRIP1B           6
 
 #define STRIP2A           6
 #define STRIP2B           9
@@ -13,6 +12,8 @@
 #define PSU_ON            A3
 
 #define BUTTON_CLICKED    1
+
+SoftwareSerial inputSerial(A5, A4);
 
 class LedStrip {
   protected:
@@ -41,13 +42,13 @@ class LedStrip {
     this -> update();
   }
 
-  void brighter (int_fast16_t i = 5) {
+  void brighter (int_fast16_t i = 20) {
     this -> setBrightness(brightness + i);
     on = true;
     this -> update();
   }
 
-  void darker (int_fast16_t i = 5) {
+  void darker (int_fast16_t i = 20) {
     this -> setBrightness(brightness - i);
     on = true;
     this -> update();
@@ -79,9 +80,9 @@ class LedStrip {
       return;
     }
     animationMultiplayer += animationDelta;
-    Serial.print(animationMultiplayer);
-    Serial.print(" ");
-    Serial.println(animationDelta);
+    // Serial.print(animationMultiplayer);
+    // Serial.print(" ");
+    // Serial.println(animationDelta);
     this -> update();
   }
 
@@ -97,20 +98,22 @@ class SingleStrip: public LedStrip {
 public:
   SingleStrip(int_fast16_t pin, int_fast16_t brightness = 255, bool on = false): LedStrip(brightness, on) {
     this -> pin = pin;
+    // Serial.println("b");
+    // Serial.println("b");
     update();
   }
 
   void update() {
     {
-      Serial.print((int)on);
-      Serial.print(" ");
-      Serial.print(brightness);
-      Serial.print(" ");
-      Serial.print(pin);
-      Serial.print(" ");
-      Serial.print(animationMultiplayer);
-      Serial.print(" ");
-      Serial.println(on * brightness * animationMultiplayer);
+      // Serial.print((int)on);
+      // Serial.print(" ");
+      // Serial.print(brightness);
+      // Serial.print(" ");
+      // Serial.print(pin);
+      // Serial.print(" ");
+      // Serial.print(animationMultiplayer);
+      // Serial.print(" ");
+      // Serial.println(on * brightness * animationMultiplayer);
     }
     analogWrite(pin, on * brightness * animationMultiplayer);
   }
@@ -133,24 +136,24 @@ public:
 
   void update() {
     {
-      Serial.print("On: ");
-      Serial.print((int)on);
-      Serial.print(" B: ");
-      Serial.print(brightness);
-      Serial.print(" A: ");
-      Serial.print(pinA);
-      Serial.print(" B: ");
-      Serial.print(pinB);
-      Serial.print(" W: ");
-      Serial.print(warmLevel);
-      Serial.print(" C: ");
-      Serial.print(coldLevel);
-      Serial.print(" : ");
-      Serial.print(animationMultiplayer);
-      Serial.print(" : ");
-      Serial.print((int)(on * ((float)warmLevel / 255.0) * brightness));
-      Serial.print(" : ");
-      Serial.println((int)(on * ((float)coldLevel / 255.0) * brightness));
+      // Serial.print("On: ");
+      // Serial.print((int)on);
+      // Serial.print(" B: ");
+      // Serial.print(brightness);
+      // Serial.print(" A: ");
+      // Serial.print(pinA);
+      // Serial.print(" B: ");
+      // Serial.print(pinB);
+      // Serial.print(" W: ");
+      // Serial.print(warmLevel);
+      // Serial.print(" C: ");
+      // Serial.print(coldLevel);
+      // Serial.print(" : ");
+      // Serial.print(animationMultiplayer);
+      // Serial.print(" : ");
+      // Serial.print((int)(on * ((float)warmLevel / 255.0) * brightness));
+      // Serial.print(" : ");
+      // Serial.println((int)(on * ((float)coldLevel / 255.0) * brightness));
     }
     analogWrite(pinA, (int)(on * ((float)warmLevel / 255.0) * brightness * animationMultiplayer));
     analogWrite(pinB, (int)(on * ((float)coldLevel / 255.0) * brightness * animationMultiplayer));
@@ -209,64 +212,54 @@ public:
   }
 };
 
-CwwStrip strip1 = CwwStrip(STRIP1A, STRIP1B);
+SingleStrip strip1 = SingleStrip(STRIP1A);
 
 SingleStrip strip3 = SingleStrip(STRIP3A);
 
 void setup() {
-  Serial.begin(115200);
-  Wire.begin(1);
-  Wire.onReceive(requestEvent);
-  
+  Serial.begin(9600);
+  inputSerial.begin(9600);
+
   pinMode(PSU_ON, OUTPUT);
 }
 
 void requestEvent(int howMany) {
-    Serial.println(howMany);
-    if (howMany >= 3) {
-        byte encoder = Wire.read();
-        byte action = Wire.read();
-        byte attr = Wire.read();
+    if (howMany >= 4) {
+        byte encoder = inputSerial.read();
+        if (encoder == 0xff) return;
+        byte action = inputSerial.read();
+        if (action == 0xff) return;
+        byte attr = inputSerial.read();
+        if (attr == 0xff) return;
+        byte end = inputSerial.read();
+
         switch(action) {
             case 1: { // encoder
                 switch(encoder) {
                     case 0: {
                         if (attr == 0) {
-                        strip1.darker();
+                          strip1.brighter();
                         }
 
                         if (attr == 1) {
-                        strip1.brighter();
+                          strip1.darker();
                         }
                     } break;
 
                     case 1: {
-                        if (attr == 0) {
-                        strip1.colder();
-                        }
 
-                        if (attr == 1) {
-                        strip1.warmer();
-                        }
                     } break;
 
                     case 2: {
-                        if (attr == 0) {
-                        strip3.darker();
-                        }
-
-                        if (attr == 1) {
-                        strip3.brighter();
-                        }
                     } break;
 
-                    case 3: { // TODO!
+                    case 3: {
                         if (attr == 0) {
-                        strip3.darker();
+                          strip3.brighter();
                         }
 
                         if (attr == 1) {
-                        strip3.brighter();
+                          strip3.darker();
                         }
                     } break;
                 }
@@ -284,7 +277,7 @@ void requestEvent(int howMany) {
                     case 1: {
                         switch(attr) {
                             case BUTTON_CLICKED: {
-                                strip1.setTemperature();
+
                             } break;
                         }
                     } break;
@@ -292,12 +285,12 @@ void requestEvent(int howMany) {
                     case 2: {
                         switch(attr) {
                             case BUTTON_CLICKED: {
-                                strip3.toggle();
+
                             } break;
                         } break;
                     } break;
 
-                    case 3: { // TODO!
+                    case 3: {
                         switch(attr) {
                             case BUTTON_CLICKED: {
                                 strip3.toggle();
@@ -318,5 +311,8 @@ void loop() {
     }
     strip1.animationService();
     strip3.animationService();
+    if (inputSerial.available()) {
+      requestEvent(inputSerial.available());
+    }
     delay(10);
 }

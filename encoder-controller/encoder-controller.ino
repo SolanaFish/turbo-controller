@@ -1,6 +1,6 @@
 #include <ClickEncoder.h>
 #include <TimerOne.h>
-#include <Wire.h>
+#include <SoftwareSerial.h>
 
 #define ENCODERS    4
 
@@ -52,6 +52,8 @@ ClickEncoder encoder3 = ClickEncoder(
 
 ClickEncoder *encoders[4];
 
+SoftwareSerial outputSerial(A4, A5);
+
 void timerIsr() {
   for (int_fast16_t i = 0; i < ENCODERS; i += 1) {
     encoders[i] -> service();
@@ -59,8 +61,8 @@ void timerIsr() {
 }
 
 void setup() {
-  Wire.begin();
-  Serial.begin(115200);
+  Serial.begin(9600);
+  outputSerial.begin(9600);
 
   Timer1.initialize(1000);
   Timer1.attachInterrupt(timerIsr);
@@ -83,11 +85,10 @@ void setup() {
 }
 
 void wireSend(byte a, byte b, byte c) {
-    Wire.beginTransmission(1);
-    Wire.write(a);
-    Wire.write(b);
-    Wire.write(c);
-    Wire.endTransmission();
+    outputSerial.write(a);
+    outputSerial.write(b);
+    outputSerial.write(c);
+    outputSerial.write(0xff);
 }
 
 void loop() {
